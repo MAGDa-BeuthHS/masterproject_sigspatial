@@ -3,6 +3,9 @@ import java.text.SimpleDateFormat
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.{DateTime, Duration}
+import utils.distance.Haversine
+import utils.slicer.grid.SimpleGridSlicer
+import utils.slicer.time.SimpleTimeSlicer
 
 object App {
 
@@ -44,22 +47,17 @@ object App {
   /**
     * Complete path to the data file.
     */
-  // val inFile: String = System.getProperty("user.dir") + "/src/main/resources/sample_data_huge.csv"
-  val inFile: String = "/Users/hagen/Downloads/yellow_tripdata_2015-01.csv"
-
-  /**
-    * Grid cell size in kilometers
-    */
-  val GridCellSizeInKm: Double = 0.2
-
-  val formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  val zero = new DateTime("2015-01-01T00:00:00.000-00:00")
+  val inFile: String = System.getProperty("user.dir") + "/src/main/resources/sample_data_huge.csv"
+  // val inFile: String = "/Users/hagen/Downloads/yellow_tripdata_2015-01.csv"
 
   val conf = new SparkConf()
     .setMaster("local[1]")
     .setAppName("masterproject_sigspatial")
 
   val sc = new SparkContext(conf)
+
+  val GridSlicer = new SimpleGridSlicer(new Haversine)
+  val TimeSlicer = new SimpleTimeSlicer
 
   def main(args: Array[String]) {
     // For sanity's sake
@@ -84,9 +82,9 @@ object App {
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
       // take only locations with more than 250 dropoffs
-      .filter(_._2 > 250)
+      //.filter(_._2 > 250)
       // and sort by dropoff count
-      //.sortBy(_._2)
+      .sortBy(_._2)
       // take top 50
       //.take(50)
       .foreach(println)
@@ -94,48 +92,16 @@ object App {
     sc.stop()
   }
 
-  def parseCsvLine(line: String): ((Long, Int, Int), Int) = {
+  def parseCsvLine(line: String): ((Int, Int, Int), Int) = {
     val fields = line.split(",")
     (
       (
-        translateTimestamp(fields(DropoffTimeIdx)),
-        translateLat(fields(DropoffLatIdx).toDouble, DropoffLatMin),
-        translateLon(fields(DropoffLonIdx).toDouble, DropoffLonMin)
+        TimeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx)),
+        GridSlicer.getCellForLat((fields(DropoffLatIdx).toDouble, DropoffLonMin)),
+        GridSlicer.getCellForLon((DropoffLatMin, fields(DropoffLonIdx).toDouble))
         ),
       1
       )
   }
 
-  def translateLat(coord: Double, base: Double): Int = {
-    translateCoord((coord, DropoffLonMin), (base, DropoffLonMin))
-  }
-
-  def translateLon(coord: Double, base: Double): Int = {
-    translateCoord((DropoffLatMin, coord), (DropoffLatMin, base))
-  }
-
-  def translateCoord(coord: (Double, Double), base: (Double, Double)): Int = {
-    // haversine distance in km, convert to meters, divide by grid cell count
-    Math.floor(haversineDistance(base, coord) / GridCellSizeInKm).toInt
-  }
-
-  def translateTimestamp(timeInCsv: String, zero: DateTime = zero): Long = {
-    val dt = new DateTime(formatter.parse(timeInCsv))
-    (roundDateTime(dt, Duration.standardHours(2)).getMillis - zero.getMillis) / Duration.standardHours(2).getMillis
-  }
-
-  def roundDateTime(t: DateTime, d: Duration): DateTime = {
-    t minus (t.getMillis - (t.getMillis.toDouble / d.getMillis).round * d.getMillis)
-  }
-
-  /**
-    * source: https://davidkeen.com/blog/2013/10/calculating-distance-with-scalas-foldleft/
-    */
-  def haversineDistance(pointA: (Double, Double), pointB: (Double, Double)): Double = {
-    val deltaLat = math.toRadians(pointB._1 - pointA._1)
-    val deltaLong = math.toRadians(pointB._2 - pointA._2)
-    val a = math.pow(math.sin(deltaLat / 2), 2) + math.cos(math.toRadians(pointA._1)) * math.cos(math.toRadians(pointB._1)) * math.pow(math.sin(deltaLong / 2), 2)
-    val greatCircleDistance = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    3958.761 * greatCircleDistance
-  }
 }
