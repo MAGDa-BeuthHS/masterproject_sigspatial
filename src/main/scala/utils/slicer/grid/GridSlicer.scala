@@ -1,21 +1,14 @@
 package utils.slicer.grid
 
-trait GridSlicer {
-  /**
-    * Latitude part of the minimum point for the NYC bounding box.
-    */
-  val DropoffLatMin: Double = 40.477399
+import com.typesafe.config.ConfigFactory
 
-  /**
-    * Latitude part of the maximum point for the NYC bounding box.
-    */
-  val DropoffLonMin: Double = -74.25909
+trait GridSlicer extends Serializable {
+  val conf = ConfigFactory.load()
+  val DropoffLatMin: Double = conf.getLong("dropoff.lat.min")
+  val DropoffLonMin: Double = conf.getDouble("dropoff.lon.min")
+  val GridCellSizeInKm: Double = conf.getDouble("app.cellsize")
 
-  /**
-    * Grid cell size in kilometers
-    */
-  val GridCellSizeInKm: Double = 0.2
+  def getCellForLat(lat: Double): Int
 
-  def getCellForLat(coord: (Double, Double)): Int
-  def getCellForLon(coord: (Double, Double)): Int
+  def getCellForLon(lon: Double): Int
 }

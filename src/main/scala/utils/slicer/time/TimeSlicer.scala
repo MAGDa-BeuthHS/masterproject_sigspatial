@@ -1,5 +1,5 @@
 package utils.slicer.time
 
-trait TimeSlicer {
+trait TimeSlicer extends Serializable {
   def getSliceForTimestamp(timestampInCsv: String): Int
 }

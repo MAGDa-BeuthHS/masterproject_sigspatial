@@ -3,11 +3,11 @@ package utils.distance
 class Haversine extends DistanceCalculator {
 
   /**
-    * source: https://davidkeen.com/blog/2013/10/calculating-distance-with-scalas-foldleft/
+    * @see http://www.movable-type.co.uk/scripts/latlong.html
     *
     * @param pointA
     * @param pointB
-    * @return
+    * @return Distance between the two points in km.
     */
   override def calculate(pointA: (Double, Double), pointB: (Double, Double)): Double = {
     val deltaLat = math.toRadians(pointB._1 - pointA._1)
@@ -17,6 +17,6 @@ class Haversine extends DistanceCalculator {
         math.cos(math.toRadians(pointB._1)) *
         math.pow(math.sin(deltaLong / 2), 2)
     val greatCircleDistance = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    3958.761 * greatCircleDistance
+    6371 * greatCircleDistance
   }
 }
