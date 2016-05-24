@@ -56,11 +56,12 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
 
   def parseCsvLine(line: String): ((Int, Int, Int), Int) = {
     val fields = line.split(",")
+    val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble))
     (
       (
         timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx)),
-        gridSlicer.getCellForLat(fields(DropoffLatIdx).toDouble),
-        gridSlicer.getCellForLon(fields(DropoffLonIdx).toDouble)
+        cells._1,
+        cells._2
         ),
       1
       )
