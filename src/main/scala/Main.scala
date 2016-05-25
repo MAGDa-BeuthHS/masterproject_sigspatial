@@ -1,3 +1,5 @@
+import org.apache.hadoop.mapred.InvalidInputException
+import org.apache.log4j.Logger
 import utils.distance.Haversine
 import utils.slicer.grid.SimpleGridSlicer
 import utils.slicer.time.SimpleTimeSlicer
@@ -12,6 +14,11 @@ object Main extends App {
   val TimeSlicer = new SimpleTimeSlicer
 
   val sp = new SparkProcessor(TimeSlicer, GridSlicer)
-  sp.process(inFileMini)
+
+  try {
+    sp.process(args(0))
+  } catch {
+    case e: InvalidInputException => Logger.getLogger(Main.getClass).error(e.getMessage)
+  }
 
 }

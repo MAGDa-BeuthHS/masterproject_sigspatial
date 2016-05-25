@@ -18,7 +18,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
 
   def process(file: String): Unit = {
     val sparkConf = new SparkConf()
-      .setMaster("local[1]")
+      // .setMaster("local[1]")
       .setAppName(conf.getString("app.name"))
 
     val sc = new SparkContext(sparkConf)
@@ -48,7 +48,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
       // and sort by dropoff count
       .sortBy(_._2)
       // take top 50
-      //.take(50)
+      .take(50)
       .foreach(println)
 
     sc.stop()
