@@ -1,0 +1,3 @@
+scalatest:
+  script:
+    - sbt test
