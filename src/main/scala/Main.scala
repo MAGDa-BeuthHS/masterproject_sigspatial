@@ -4,6 +4,10 @@ import utils.distance.Haversine
 import utils.slicer.grid.SimpleGridSlicer
 import utils.slicer.time.SimpleTimeSlicer
 
+/**
+  * Example call:
+  * ./bin/spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in days]
+  */
 object Main extends App {
 
   val inFileMini: String = System.getProperty("user.dir") + "/src/main/resources/sample_data.csv"

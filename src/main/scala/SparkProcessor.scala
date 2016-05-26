@@ -18,7 +18,6 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
 
   def process(file: String): Unit = {
     val sparkConf = new SparkConf()
-      // .setMaster("local[1]")
       .setAppName(conf.getString("app.name"))
 
     val sc = new SparkContext(sparkConf)

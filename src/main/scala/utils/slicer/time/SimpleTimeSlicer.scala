@@ -14,7 +14,7 @@ class SimpleTimeSlicer extends TimeSlicer {
   }
 
   private def translateTimestamp(dt: DateTime, zero: DateTime = zero): Int = {
-    ((roundDateTime(dt, Duration.standardHours(2)).getMillis - zero.getMillis) / Duration.standardHours(2).getMillis).toInt
+    ((roundDateTime(dt, Duration.standardHours(conf.getInt("app.timeslice"))).getMillis - zero.getMillis) / Duration.standardHours(2).getMillis).toInt
   }
 
   private def roundDateTime(t: DateTime, d: Duration): DateTime = {
