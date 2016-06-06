@@ -3,8 +3,9 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
+import utils.writer.Writer
 
-class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Serializable {
+class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Seq[Writer]) extends Serializable {
 
   val conf = ConfigFactory.load()
   val DropoffTimeHeader: String = conf.getString("dropoff.time.header")
@@ -34,12 +35,13 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
     // For sanity's sake
     Logger.getLogger("org").setLevel(Level.ERROR)
     Logger.getLogger("akka").setLevel(Level.ERROR)
+    Logger.getLogger(this.getClass).setLevel(Level.INFO)
 
     val taxiFile = sc.textFile(input)
 
     val header = taxiFile.first()
 
-    taxiFile
+    val taxiData = taxiFile
       // Remove header
       .filter(_ != header)
       // Filter for the year 2015 with non-empty longitude and latitude
@@ -58,7 +60,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
       .sortBy(_._2, ascending = false)
       // take top 50
       .take(50)
-      .foreach(println)
+
+    writers.foreach(writer => writer.write(taxiData, output))
+    Logger.getLogger(this.getClass).info(s"Output has been written to $output/${conf.getString("output.filename")}")
 
     sc.stop()
   }

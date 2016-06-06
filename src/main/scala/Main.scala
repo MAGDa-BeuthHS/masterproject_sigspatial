@@ -5,6 +5,7 @@ import org.apache.hadoop.mapred.InvalidInputException
 import org.apache.log4j.{Level, Logger}
 import utils.slicer.grid.SimpleGridSlicer
 import utils.slicer.time.SimpleTimeSlicer
+import utils.writer.{TerminalWriter, CsvWriter}
 
 /**
   * Example call:
@@ -13,12 +14,12 @@ import utils.slicer.time.SimpleTimeSlicer
 object Main extends App {
 
   val conf = ConfigFactory.load()
-  val GridSlicer = new SimpleGridSlicer
-  val TimeSlicer = new SimpleTimeSlicer
+  val gridslicer = new SimpleGridSlicer
+  val timeslicer = new SimpleTimeSlicer
   val logger = Logger.getLogger(Main.getClass)
   logger.setLevel(Level.DEBUG)
 
-  val sp = new SparkProcessor(TimeSlicer, GridSlicer)
+  val sp = new SparkProcessor(timeslicer, gridslicer, Seq(new CsvWriter, new TerminalWriter))
 
   private def printUsageAndError(msg: String) = {
     logger.error(msg)
