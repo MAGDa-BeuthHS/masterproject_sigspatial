@@ -3,8 +3,9 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
+import utils.writer.Writer
 
-class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Serializable {
+class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Seq[Writer]) extends Serializable {
 
   val conf = ConfigFactory.load()
   val DropoffTimeHeader: String = conf.getString("dropoff.time.header")
@@ -19,7 +20,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
 
-  def process(file: String): Unit = {
+  def process(input: String, output: String, cellSize: Double, timeSize: Int): Unit = {
     val sparkConf = new SparkConf()
 
       /**
@@ -34,8 +35,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
     // For sanity's sake
     Logger.getLogger("org").setLevel(Level.ERROR)
     Logger.getLogger("akka").setLevel(Level.ERROR)
+    Logger.getLogger(this.getClass).setLevel(Level.INFO)
 
-    val taxiFile = sc.textFile(file)
+    val taxiFile = sc.textFile(input)
 
     val header = taxiFile.first()
 
@@ -51,23 +53,25 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
       .filter(_.split(",")(DropoffLonIdx).toDouble > DropoffLonMin)
       .filter(_.split(",")(DropoffLonIdx).toDouble < DropoffLonMax)
       // get only the relevant fields off of every csv line and map them to our (t, x, y) representation
-      .map(parseCsvLine)
+      .map(line => parseCsvLine(line, cellSize, timeSize))
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
       // and sort by dropoff count
       .sortBy(_._2, ascending = false)
       // take top 50
       .take(50)
-      .foreach(println)
+
+    writers.foreach(writer => writer.write(taxiData, output))
+    Logger.getLogger(this.getClass).info(s"Output has been written to $output/${conf.getString("output.filename")}")
 
     sc.stop()
   }
 
-  def parseCsvLine(line: String): ((Int, Int, Int), Int) = {
+  def parseCsvLine(line: String, cellSize: Double, timeSize: Int): ((Int, Int, Int), Int) = {
     val fields = line.split(",")
 
-    val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble))
+    val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble), cellSize)
 
-    ((timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx)), cells._1, cells._2), 1)
+    ((timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx), timeSize), cells._1, cells._2), 1)
   }
 }

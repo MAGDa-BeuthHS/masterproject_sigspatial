@@ -2,12 +2,12 @@ package utils.slicer.grid
 
 class SimpleGridSlicer() extends GridSlicer {
 
-  def getLatCell(coord: Double): Int = {
-    getCell(conf.getDouble("dropoff.lat.min"), conf.getDouble("app.cellsize"), coord)
+  def getLatCell(coord: Double, cellSize: Double): Int = {
+    getCell(conf.getDouble("dropoff.lat.min"), cellSize, coord)
   }
 
-  def getLonCell(coord: Double): Int = {
-    getCell(conf.getDouble("dropoff.lon.max"), conf.getDouble("app.cellsize"), coord)
+  def getLonCell(coord: Double, cellSize: Double): Int = {
+    getCell(conf.getDouble("dropoff.lon.max"), cellSize, coord)
   }
 
   private def getCell(lowerBoundary: Double, cellSize: Double, coord: Double): Int = {
@@ -16,10 +16,10 @@ class SimpleGridSlicer() extends GridSlicer {
     Math.floor(max - min / cellSize).toInt
   }
 
-  override def getCellsForPoint(p: (Double, Double)): (Int, Int) = {
+  override def getCellsForPoint(p: (Double, Double), cellSize: Double): (Int, Int) = {
     (
-      getLatCell(p._1),
-      getLonCell(p._2)
+      getLatCell(p._1, cellSize),
+      getLonCell(p._2, cellSize)
       )
   }
 }
