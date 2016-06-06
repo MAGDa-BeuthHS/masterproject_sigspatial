@@ -7,6 +7,9 @@ import utils.slicer.time.TimeSlicer
 class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Serializable {
 
   val conf = ConfigFactory.load()
+  val DropoffTimeHeader: String = conf.getString("dropoff.time.header")
+  val DropoffLatHeader: String = conf.getString("dropoff.lat.header")
+  val DropoffLonHeader: String = conf.getString("dropoff.lon.header")
   val DropoffLatIdx: Int = conf.getInt("dropoff.lat.idx")
   val DropoffLonIdx: Int = conf.getInt("dropoff.lon.idx")
   val DropoffTimeIdx: Int = conf.getInt("dropoff.time.idx")
@@ -18,6 +21,12 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
 
   def process(file: String): Unit = {
     val sparkConf = new SparkConf()
+
+      /**
+        * enable the following line to make it work locally.
+        * But beware: if it runs on the cluster with this line not uncommented the cluster uses only one node!
+        */
+      // .setMaster("local[1]")
       .setAppName(conf.getString("app.name"))
 
     val sc = new SparkContext(sparkConf)
@@ -28,9 +37,12 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
 
     val taxiFile = sc.textFile(file)
 
+    val header = taxiFile.first()
+
     val taxiData = taxiFile
+      // Remove header
+      .filter(_ != header)
       // Filter for the year 2015 with non-empty longitude and latitude
-      .filter(_.contains("2015"))
       .filter(_.split(",")(DropoffLatIdx) != "")
       .filter(_.split(",")(DropoffLonIdx) != "")
       // Filter for the NYC area
@@ -42,10 +54,8 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
       .map(parseCsvLine)
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
-      // take only locations with more than 250 dropoffs
-      //.filter(_._2 > 250)
       // and sort by dropoff count
-      .sortBy(_._2)
+      .sortBy(_._2, ascending = false)
       // take top 50
       .take(50)
       .foreach(println)
@@ -55,14 +65,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
 
   def parseCsvLine(line: String): ((Int, Int, Int), Int) = {
     val fields = line.split(",")
+
     val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble))
-    (
-      (
-        timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx)),
-        cells._1,
-        cells._2
-        ),
-      1
-      )
+
+    ((timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx)), cells._1, cells._2), 1)
   }
 }

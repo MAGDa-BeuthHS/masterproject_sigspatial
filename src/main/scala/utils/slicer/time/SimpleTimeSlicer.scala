@@ -6,8 +6,8 @@ import org.joda.time.{DateTime, Duration}
 
 class SimpleTimeSlicer extends TimeSlicer {
 
-  val formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  val zero = new DateTime("2009-01-01T00:00:00.000-00:00")
+  val formatter = new SimpleDateFormat(conf.getString("app.datetimeformat"))
+  val zero = new DateTime(formatter.parse(conf.getString("app.zero")))
 
   override def getSliceForTimestamp(timestampInCsv: String): Int = {
     translateTimestamp(new DateTime(formatter.parse(timestampInCsv)))
@@ -19,5 +19,9 @@ class SimpleTimeSlicer extends TimeSlicer {
 
   private def roundDateTime(t: DateTime, d: Duration): DateTime = {
     t minus (t.getMillis - (t.getMillis.toDouble / d.getMillis).round * d.getMillis)
+  }
+
+  override def getTimestampForSlice(slice: Int): DateTime = {
+    zero plus Duration.standardHours(slice.toLong * conf.getInt("app.timeslice"))
   }
 }

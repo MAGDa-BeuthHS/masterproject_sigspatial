@@ -1,17 +1,25 @@
 package utils.slicer.grid
 
-import utils.distance.DistanceCalculator
+class SimpleGridSlicer() extends GridSlicer {
 
-class SimpleGridSlicer(calc: DistanceCalculator) extends GridSlicer {
+  def getLatCell(coord: Double): Int = {
+    getCell(conf.getDouble("dropoff.lat.min"), conf.getDouble("app.cellsize"), coord)
+  }
 
-  private def translateCoord(coord: (Double, Double), base: (Double, Double)): Int = {
-    Math.floor(calc.calculate(base, coord) / conf.getDouble("app.cellsize")).toInt
+  def getLonCell(coord: Double): Int = {
+    getCell(conf.getDouble("dropoff.lon.max"), conf.getDouble("app.cellsize"), coord)
+  }
+
+  private def getCell(lowerBoundary: Double, cellSize: Double, coord: Double): Int = {
+    val max = Math.max(coord, lowerBoundary)
+    val min = Math.min(coord, lowerBoundary)
+    Math.floor(max - min / cellSize).toInt
   }
 
   override def getCellsForPoint(p: (Double, Double)): (Int, Int) = {
     (
-      translateCoord(p, (conf.getDouble("dropoff.lat.min"), p._2)),
-      translateCoord(p, (p._1, conf.getDouble("dropoff.lon.min")))
-    )
+      getLatCell(p._1),
+      getLonCell(p._2)
+      )
   }
 }
