@@ -19,7 +19,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
 
-  def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
+  def process(input: String, output: String, cellSize: Double, timeSize: Int): Unit = {
     val sparkConf = new SparkConf()
 
       /**
@@ -51,7 +51,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
       .filter(_.split(",")(DropoffLonIdx).toDouble > DropoffLonMin)
       .filter(_.split(",")(DropoffLonIdx).toDouble < DropoffLonMax)
       // get only the relevant fields off of every csv line and map them to our (t, x, y) representation
-      .map(parseCsvLine)
+      .map(line => parseCsvLine(line, cellSize, timeSize))
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
       // and sort by dropoff count
@@ -63,11 +63,11 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
     sc.stop()
   }
 
-  def parseCsvLine(line: String): ((Int, Int, Int), Int) = {
+  def parseCsvLine(line: String, cellSize: Double, timeSize: Int): ((Int, Int, Int), Int) = {
     val fields = line.split(",")
 
-    val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble))
+    val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble), cellSize)
 
-    ((timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx)), cells._1, cells._2), 1)
+    ((timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx), timeSize), cells._1, cells._2), 1)
   }
 }

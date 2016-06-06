@@ -32,7 +32,7 @@ object Main extends App {
     val input: String = args(0)
     val output: String = args(1)
     val cellSize: Double = args(2).toDouble
-    val timeSize: Double = args(3).toDouble
+    val timeSize: Int = args(3).toInt
 
     if (!new File(input).canWrite) throw new IllegalArgumentException("Output directory is not writable!")
     if (cellSize <= 0) throw new IllegalArgumentException("cellSize must be > 0")
