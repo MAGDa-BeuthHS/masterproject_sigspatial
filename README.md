@@ -20,4 +20,4 @@ basic invocation scheme:
     spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in days]
 
 * ssh into cluster and in homedir run: `spark-submit --class Main mp.jar yellow_tripdata_2015-01.csv ./ 0.01 7`
-* remember: spark currently only prints to stdout. **lose the connection and you'll lose your output.**
+* after a succesful run you\'ll find your results printed to stdout and written to `~/hdfs_home/mp_out.csv`
