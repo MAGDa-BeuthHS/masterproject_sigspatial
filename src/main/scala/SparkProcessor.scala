@@ -19,7 +19,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
 
-  def process(file: String): Unit = {
+  def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
     val sparkConf = new SparkConf()
 
       /**
@@ -35,11 +35,11 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer) extends Ser
     Logger.getLogger("org").setLevel(Level.ERROR)
     Logger.getLogger("akka").setLevel(Level.ERROR)
 
-    val taxiFile = sc.textFile(file)
+    val taxiFile = sc.textFile(input)
 
     val header = taxiFile.first()
 
-    val taxiData = taxiFile
+    taxiFile
       // Remove header
       .filter(_ != header)
       // Filter for the year 2015 with non-empty longitude and latitude
