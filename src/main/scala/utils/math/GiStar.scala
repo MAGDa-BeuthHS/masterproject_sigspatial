@@ -2,13 +2,14 @@ package utils.math
 
 import scala.math.sqrt
 
-object GiStar
+object GiStar extends Serializable
 {
   /*
   x: List of all cells
   n: Number of all cells --> Length of x
   avg: Average value of all cells
   s: Standart Deviation of cell set
+  W: List of all neighbours attributes
    */
 
   def calcZ(w: List[Int], n: Long, avg: Float, s: Float): Float =
