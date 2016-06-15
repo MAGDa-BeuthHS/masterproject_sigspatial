@@ -37,7 +37,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     Logger.getLogger("akka").setLevel(Level.ERROR)
     Logger.getLogger(this.getClass).setLevel(Level.INFO)
 
-    val taxiFile = sc.textFile(input)
+    val taxiFile = sc.textFile(getFilenames(input))
 
     val taxiData = taxiFile
       // Remove header
@@ -67,6 +67,13 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     writers.foreach(writer => writer.write(outputData, output))
     Logger.getLogger(this.getClass).info(s"Output has been written to $output/${conf.getString("output.filename")}")
     sc.stop()
+  }
+
+  def getFilenames(dir: String): String = {
+    Logger.getLogger(this.getClass).debug(s"Looking for files in $dir")
+    val filenames = new java.io.File(dir).listFiles.filter(_.getName.endsWith(".csv")).mkString(",")
+    Logger.getLogger(this.getClass).debug(s"Found files: $filenames")
+    filenames
   }
 
   def parseCsvLine(line: String, cellSize: Double, timeSize: Double): ((Int, Int, Int), Int) = {
