@@ -1,6 +1,6 @@
 package utils.writer
 
-import java.io.{PrintWriter, BufferedWriter, File}
+import java.io.PrintWriter
 
 import com.typesafe.config.ConfigFactory
 

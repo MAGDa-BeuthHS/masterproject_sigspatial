@@ -20,7 +20,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
 
-  def process(input: String, output: String, cellSize: Double, timeSize: Int): Unit = {
+  def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
     val sparkConf = new SparkConf()
 
       /**
@@ -39,11 +39,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
 
     val taxiFile = sc.textFile(input)
 
-    val header = taxiFile.first()
-
     val taxiData = taxiFile
       // Remove header
-      .filter(_ != header)
+      .filter(!_.startsWith("VendorID"))
       // Filter for the year 2015 with non-empty longitude and latitude
       .filter(_.split(",")(DropoffLatIdx) != "")
       .filter(_.split(",")(DropoffLonIdx) != "")
@@ -56,18 +54,22 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .map(line => parseCsvLine(line, cellSize, timeSize))
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
+
+    val countRows = taxiData.count()
+    Logger.getLogger(this.getClass).info(s"$countRows rows in total.")
+
+    val outputData = taxiData
       // and sort by dropoff count
       .sortBy(_._2, ascending = false)
       // take top 50
       .take(50)
 
-    writers.foreach(writer => writer.write(taxiData, output))
+    writers.foreach(writer => writer.write(outputData, output))
     Logger.getLogger(this.getClass).info(s"Output has been written to $output/${conf.getString("output.filename")}")
-
     sc.stop()
   }
 
-  def parseCsvLine(line: String, cellSize: Double, timeSize: Int): ((Int, Int, Int), Int) = {
+  def parseCsvLine(line: String, cellSize: Double, timeSize: Double): ((Int, Int, Int), Int) = {
     val fields = line.split(",")
 
     val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble), cellSize)

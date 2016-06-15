@@ -5,7 +5,7 @@ import org.apache.hadoop.mapred.InvalidInputException
 import org.apache.log4j.{Level, Logger}
 import utils.slicer.grid.SimpleGridSlicer
 import utils.slicer.time.SimpleTimeSlicer
-import utils.writer.{TerminalWriter, CsvWriter}
+import utils.writer.{CsvWriter, TerminalWriter}
 
 /**
   * Example call:
@@ -28,14 +28,16 @@ object Main extends App {
   }
 
   try {
+    logger.debug(s"${args.length} arguments supplied:")
+    args.foreach(logger.debug)
     if (args.length != 4) throw new IllegalArgumentException("Number of parameters is completely wrong, man!")
 
     val input: String = args(0)
     val output: String = args(1)
     val cellSize: Double = args(2).toDouble
-    val timeSize: Int = args(3).toInt
+    val timeSize: Double = args(3).toDouble
 
-    if (!new File(input).canWrite) throw new IllegalArgumentException("Output directory is not writable!")
+    if (!new File(output).canWrite) throw new IllegalArgumentException("Output directory is not writable!")
     if (cellSize <= 0) throw new IllegalArgumentException("cellSize must be > 0")
     if (timeSize <= 0) throw new IllegalArgumentException("timeSize must be > 0")
 

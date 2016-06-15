@@ -9,12 +9,12 @@ class SimpleTimeSlicer extends TimeSlicer {
   val formatter = new SimpleDateFormat(conf.getString("app.datetimeformat"))
   val zero = new DateTime(formatter.parse(conf.getString("app.zero")))
 
-  override def getSliceForTimestamp(timestampInCsv: String, sliceSize: Int): Int = {
+  override def getSliceForTimestamp(timestampInCsv: String, sliceSize: Double): Int = {
     translateTimestamp(new DateTime(formatter.parse(timestampInCsv)), sliceSize)
   }
 
-  private def translateTimestamp(dt: DateTime, sliceSize: Int, zero: DateTime = zero): Int = {
-    ((roundDateTime(dt, Duration.standardDays(sliceSize)).getMillis - zero.getMillis) / Duration.standardDays(2).getMillis).toInt
+  private def translateTimestamp(dt: DateTime, sliceSize: Double, zero: DateTime = zero): Int = {
+    ((roundDateTime(dt, Duration.standardHours((sliceSize * 24).toLong)).getMillis - zero.getMillis) / Duration.standardDays(2).getMillis).toInt
   }
 
   private def roundDateTime(t: DateTime, d: Duration): DateTime = {
