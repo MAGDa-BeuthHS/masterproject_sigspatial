@@ -1,5 +1,7 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types._
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
@@ -31,11 +33,19 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .setAppName(conf.getString("app.name"))
 
     val sc = new SparkContext(sparkConf)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // For sanity's sake
     Logger.getLogger("org").setLevel(Level.ERROR)
     Logger.getLogger("akka").setLevel(Level.ERROR)
-    Logger.getLogger(this.getClass).setLevel(Level.INFO)
+    Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
+
+    val schema = StructType(List(
+      new StructField("t", IntegerType, false),
+      new StructField("x", IntegerType, false),
+      new StructField("y", IntegerType, false),
+      new StructField("count", IntegerType, false)
+    ))
 
     val taxiFile = sc.textFile(getFilenames(input))
 
@@ -54,18 +64,12 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .map(line => parseCsvLine(line, cellSize, timeSize))
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
+      .map(line => Row(line._1._1, line._1._2, line._1._3, line._2))
 
-    val countRows = taxiData.count()
-    Logger.getLogger(this.getClass).info(s"$countRows rows in total.")
+    val df = sqlContext.createDataFrame(taxiData, schema)
+    val results = df.filter("t = 0 OR t = 1 OR t = 2")
+    results.map(row => row.mkString(",")).foreach(println)
 
-    val outputData = taxiData
-      // and sort by dropoff count
-      .sortBy(_._2, ascending = false)
-      // take top 50
-      .take(50)
-
-    writers.foreach(writer => writer.write(outputData, output))
-    Logger.getLogger(this.getClass).info(s"Output has been written to $output/${conf.getString("output.filename")}")
     sc.stop()
   }
 
