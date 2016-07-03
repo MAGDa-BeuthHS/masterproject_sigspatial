@@ -1,6 +1,7 @@
 package utils.math
 
 import scala.math.sqrt
+import org.apache.commons.math3.special.Erf   // Math lib for error function
 
 object GiStar extends Serializable {
 
@@ -20,7 +21,27 @@ object GiStar extends Serializable {
   }
 
   def calcP(z: Double): Double = {
-    0.0 * z
+    val mu = 0.0
+    val sigma = 1.0
+    if (z >= mu) {
+      2 * normalProbabilityAbove(z, mu, sigma)
+    } else {
+      2 * normalProbabilityBelow(z, mu, sigma)
+    }
+  }
+
+  def normalProbabilityBelow(x: Double, mu: Double, sigma: Double): Double = {
+    normalCdf(x, mu, sigma)
+  }
+
+  def normalProbabilityAbove(x: Double, mu: Double, sigma: Double): Double = {
+    1 - normalCdf(x, mu, sigma)
+  }
+
+  def normalCdf(x: Double, mu: Double, sigma: Double): Double = {
+    // cumulative distribution function
+    // erf means the error function
+    (1 + Erf.erf((x - mu) / math.sqrt(2.0) / sigma)) / 2.0
   }
 
   def calcStdDeviation(x: List[Int]): Double = {
@@ -62,38 +83,38 @@ object GiStar extends Serializable {
     sum
   }
 
-//    def calcZWithFloat(w: List[Float], n: Long, avg: Float, stdDeviation: Float): Float =
-//    {
-//      val numerator   = w.sum - (avg * w.length)
-//      val denominator = sqrt((w.length * (n - w.length) * stdDeviation) / (n - 1)).toFloat
-//      numerator / denominator
-//    }
-//
-//    def calcStdDeviationWithFloat(x: List[Float]): Float =
-//    {
-//      val sumX2 = calcSumXToPowerOf2WithFloat(x)
-//      val avg = calcAverageValueWithFloat(x)
-//      calcStdDeviationWithFloat(x.length, avg, sumX2)
-//    }
-//
-//    def calcStdDeviationWithFloat(n: Long, avg: Float, sumX2: Float): Float =
-//    {
-//      (sumX2 / n.toFloat) - (avg * avg)
-//    }
-//
-//    def calcAverageValueWithFloat(x: List[Float]): Float =
-//    {
-//      x.sum / x.length.toFloat
-//    }
-//
-//    def calcSumXToPowerOf2WithFloat(x: List[Float]): Float =
-//    {
-//      var i = 0
-//      var sum = 0f
-//      while (i < x.length) {
-//        sum += x(i) * x(i)
-//        i += 1
-//      }
-//      sum
-//    }
+  def paperCalcZ(w: List[Float], n: Long, avg: Float, stdDeviation: Float): Float =
+  {
+    val numerator   = w.sum - (avg * w.length)
+    val denominator = sqrt((w.length * (n - w.length) * stdDeviation) / (n - 1)).toFloat
+    numerator / denominator
+  }
+
+  def paperCalcStdDeviation(x: List[Float]): Float =
+  {
+    val sumX2 = paperCalcSumXToPowerOf2(x)
+    val avg = paperCalcAverageValue(x)
+    paperCalcStdDeviation(x.length, avg, sumX2)
+  }
+
+  def paperCalcStdDeviation(n: Long, avg: Float, sumX2: Float): Float =
+  {
+    (sumX2 / n.toFloat) - (avg * avg)
+  }
+
+  def paperCalcAverageValue(x: List[Float]): Float =
+  {
+    x.sum / x.length.toFloat
+  }
+
+  def paperCalcSumXToPowerOf2(x: List[Float]): Float =
+  {
+    var i = 0
+    var sum = 0f
+    while (i < x.length) {
+      sum += x(i) * x(i)
+      i += 1
+    }
+    sum
+  }
 }
