@@ -37,7 +37,12 @@ object Main extends App {
     val cellSize: Double = args(2).toDouble
     val timeSize: Double = args(3).toDouble
 
-    if (!new File(output).canWrite) throw new IllegalArgumentException("Output directory is not writable!")
+    val inputDir: File = new File(input)
+    if (!inputDir.isDirectory && !inputDir.canRead) throw new IllegalArgumentException("Input directory ${inputDir.getAbsolutePath} is not readable!")
+
+    val outputDir: File = new File(output)
+    if (!outputDir.isDirectory && outputDir.canWrite) throw new IllegalArgumentException(s"Output directory ${outputDir.getAbsolutePath} is not writable!")
+
     if (cellSize <= 0) throw new IllegalArgumentException("cellSize must be > 0")
     if (timeSize <= 0) throw new IllegalArgumentException("timeSize must be > 0")
 
