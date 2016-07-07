@@ -1,6 +1,6 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.types._
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.slicer.grid.GridSlicer
@@ -21,6 +21,12 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
   val DropoffLonMin: Double = conf.getDouble("dropoff.lon.min")
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
+  val schema = StructType(List(
+    new StructField("t", IntegerType, false),
+    new StructField("x", IntegerType, false),
+    new StructField("y", IntegerType, false),
+    new StructField("count", IntegerType, false)
+  ))
 
   def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
     val sparkConf = new SparkConf()
@@ -36,16 +42,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // For sanity's sake
-    Logger.getLogger("org").setLevel(Level.ERROR)
-    Logger.getLogger("akka").setLevel(Level.ERROR)
+    Logger.getLogger("org").setLevel(Level.INFO)
+    Logger.getLogger("akka").setLevel(Level.INFO)
     Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
-
-    val schema = StructType(List(
-      new StructField("t", IntegerType, false),
-      new StructField("x", IntegerType, false),
-      new StructField("y", IntegerType, false),
-      new StructField("count", IntegerType, false)
-    ))
 
     val taxiFile = sc.textFile(getFilenames(input))
 
@@ -68,9 +67,15 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
 
     val df = sqlContext.createDataFrame(taxiData, schema)
     val results = df.filter("t = 0 OR t = 1 OR t = 2")
-    results.map(row => row.mkString(",")).foreach(println)
+    printResults(results)
 
     sc.stop()
+  }
+
+  def printResults(results: DataFrame): Unit ={
+    Logger.getLogger(this.getClass).info(results)
+    Logger.getLogger(this.getClass).info(s"lines: ${results.count()}")
+    results.map(row => row.mkString(",")).foreach(println)
   }
 
   def getFilenames(dir: String): String = {
