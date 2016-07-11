@@ -1,7 +1,8 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
@@ -42,13 +43,38 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // For sanity's sake
-    Logger.getLogger("org").setLevel(Level.INFO)
-    Logger.getLogger("akka").setLevel(Level.INFO)
+    Logger.getLogger("org").setLevel(Level.ERROR)
+    Logger.getLogger("akka").setLevel(Level.ERROR)
     Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
 
-    val taxiFile = sc.textFile(getFilenames(input))
+    val taxiFile: RDD[String] = sc.textFile(getFilenames(input))
 
-    val taxiData = taxiFile
+    val taxiData = transformCsvToRdd(cellSize, timeSize, taxiFile)
+
+    val stats: RDD[Int] = taxiData.map(_._2)
+    val count = stats.count()
+    val mean = stats.mean()
+    Logger.getLogger(this.getClass).info(s"Evaluating a total of $count rows.")
+    Logger.getLogger(this.getClass).debug(s"Mean of $count rows: $mean")
+
+    val df = sqlContext.createDataFrame(taxiData.map(line => Row(line._1._1, line._1._2, line._1._3, line._2)), schema)
+    val results = df.filter("t = 0 OR t = 1 OR t = 2").orderBy("t").select("t").show()
+
+    sc.stop()
+  }
+
+  /**
+    * This method is used to get the information we need from all supplied csv files.
+    * First we filter for NYC area, then take only the information we need from each csv line and finally reduce and
+    * count them.
+    *
+    * @param cellSize cli argument
+    * @param timeSize cli argument
+    * @param taxiFile the RDD to operate on
+    * @return An RDD containing tuples in this form ((t, x, y) count)
+    */
+  private def transformCsvToRdd(cellSize: Double, timeSize: Double, taxiFile: RDD[String]): RDD[((Int, Int, Int), Int)] = {
+    taxiFile
       // Remove header
       .filter(!_.startsWith("VendorID"))
       // Filter for the year 2015 with non-empty longitude and latitude
@@ -63,16 +89,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .map(line => parseCsvLine(line, cellSize, timeSize))
       // reduce by counting everything with the same key
       .reduceByKey(_ + _)
-      .map(line => Row(line._1._1, line._1._2, line._1._3, line._2))
-
-    val df = sqlContext.createDataFrame(taxiData, schema)
-    val results = df.filter("t = 0 OR t = 1 OR t = 2")
-    printResults(results)
-
-    sc.stop()
   }
 
-  def printResults(results: DataFrame): Unit ={
+  def printResults(results: DataFrame): Unit = {
     Logger.getLogger(this.getClass).info(results)
     Logger.getLogger(this.getClass).info(s"lines: ${results.count()}")
     results.map(row => row.mkString(",")).foreach(println)
