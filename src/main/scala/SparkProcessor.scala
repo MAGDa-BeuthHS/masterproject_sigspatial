@@ -112,9 +112,9 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
 
       /**
         * enable the following line to make it work locally.
-        * But beware: if it runs on the cluster with this line not uncommented the cluster uses only one node!
+        * But beware: if it runs on the cluster with this line not uncommented the cluster uses all available nodes!
         */
-      .setMaster("local[1]")
+      .setMaster("local[*]")
       .setAppName(conf.getString("app.name"))
 
     val sc = new SparkContext(sparkConf)

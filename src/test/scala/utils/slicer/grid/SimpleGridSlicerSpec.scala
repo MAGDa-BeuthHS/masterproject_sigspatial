@@ -25,10 +25,20 @@ class SimpleGridSlicerSpec extends FlatSpec with Matchers {
     slicer.getLatCell(11, conf.getDouble("app.cellsize")).shouldBe(11)
   }
 
-  it should "olace a point correctly" in {
+  it should "place a point correctly" in {
     slicer.getCellsForPoint((0, 0), conf.getDouble("app.cellsize")).shouldBe((0, 0))
     slicer.getCellsForPoint((1, -1), conf.getDouble("app.cellsize")).shouldBe((1, 1))
     slicer.getCellsForPoint((9.2133214125122, -2.124124125325), conf.getDouble("app.cellsize")).shouldBe((9, 2))
+  }
+
+  it should "return the correct total amount of lat grid cells" in {
+    slicer.getMaxLatCell(1).shouldBe(10)
+    slicer.getMaxLatCell(0.1).shouldBe(100)
+  }
+
+  it should "return the correct total amount of lon grid cells" in {
+    slicer.getMaxLonCell(1).shouldBe(10)
+    slicer.getMaxLonCell(0.1).shouldBe(100)
   }
 
 }

@@ -36,4 +36,12 @@ class SimpleTimeSlicerSpec extends FlatSpec with Matchers {
     underTest.getTimestampForSlice(slice, conf.getInt("app.timeslice")).shouldBe(expected)
   }
 
+  it should "return the correct total amount of timeslices" in {
+    val expected = 364
+    underTest.getMaxSlice(1).shouldBe(expected)
+    underTest.getMaxSlice(0.5).shouldBe(expected * 2)
+    underTest.getMaxSlice(7).shouldBe(52)
+    underTest.getMaxSlice(364).shouldBe(1)
+  }
+
 }

@@ -7,5 +7,7 @@ trait GridSlicer extends Serializable {
 
   def getCellsForPoint(p: (Double, Double), cellSize: Double): (Int, Int)
   def getLatCell(coord: Double, cellSize: Double): Int
+  def getMaxLatCell(cellSize: Double): Int
   def getLonCell(coord: Double, cellSize: Double): Int
+  def getMaxLonCell(cellSize: Double): Int
 }

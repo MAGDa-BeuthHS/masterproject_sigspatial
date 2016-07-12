@@ -22,4 +22,12 @@ class SimpleGridSlicer() extends GridSlicer {
       getLonCell(p._2, cellSize)
       )
   }
+
+  override def getMaxLatCell(cellSize: Double): Int = {
+    ((conf.getDouble("dropoff.lat.max") - conf.getDouble("dropoff.lat.min")) / cellSize).toInt
+  }
+
+  override def getMaxLonCell(cellSize: Double): Int = {
+    ((conf.getDouble("dropoff.lon.max") - conf.getDouble("dropoff.lon.min")) / cellSize).toInt
+  }
 }
