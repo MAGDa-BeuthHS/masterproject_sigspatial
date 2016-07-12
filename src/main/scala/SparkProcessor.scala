@@ -1,8 +1,10 @@
+import java.io.File
+
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions.{count, mean, udf, _}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.math.GiStar
 import utils.slicer.grid.GridSlicer
@@ -25,13 +27,23 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
   val DropoffLonMin: Double = conf.getDouble("dropoff.lon.min")
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
+  private def calculateW(df: DataFrame, sQLContext: SQLContext): DataFrame = {
+    def calcW(): Seq[String] = {
+      Seq(List.fill(27)(Random.nextInt(100)).mkString(","))
+    } // TODO
+
+    val schema = StructType(df.schema.fields ++ Array(StructField("w", StringType)))
+    val rows = df.rdd.map(r => Row.fromSeq(r.toSeq ++ calcW()))
+    sQLContext.createDataFrame(rows, schema)
+  }
+
   /**
     * Adds missing z and p values to rows in df.
     *
     * @param df without z and p values.
     * @return df with missing values.
     */
-  private def calculateMissingValues(df: DataFrame, sqlc: SQLContext): DataFrame = {
+  private def calculateZandP(df: DataFrame, sqlc: SQLContext): DataFrame = {
     /*
         val count: Long = df.count()
         val mean: Double = df.select(avg("count")).collect()(0).getDouble(0)
@@ -71,7 +83,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     * @param sqlc     The properly initialized SQLContext
     * @return A DataFrame containing tuples in this form: (t, x, y, count, w)
     */
-  def transformCsvToDf(cellSize: Double, timeSize: Double, filename: String, sqlc: SQLContext): DataFrame = {
+  private def transformCsvToDf(cellSize: Double, timeSize: Double, filename: String, sqlc: SQLContext): DataFrame = {
     val df = sqlc.read
       .format("com.databricks.spark.csv")
       .option("header", "true")
@@ -81,7 +93,6 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     def tUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
     def xUDF = udf((x: String) => gridSlicer.getLatCell(x.toDouble, cellSize))
     def yUDF = udf((y: String) => gridSlicer.getLonCell(y.toDouble, cellSize))
-    def calcW = udf(() => List.fill(27)(Random.nextInt(100)).mkString(",")) // TODO
 
     val txyn = df.filter(df(DropoffLatHeader).isNotNull)
       .filter(df(DropoffLatHeader).geq(DropoffLatMin))
@@ -95,7 +106,6 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .withColumn(DropoffLonHeader, yUDF(df(DropoffLonHeader)))
       .groupBy(DropoffTimeHeader, DropoffLatHeader, DropoffLonHeader)
       .count()
-      .withColumn("w", calcW())
 
     txyn
   }
@@ -126,10 +136,23 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
 
     val taxiDataFrame = transformCsvToDf(cellSize, timeSize, input, sqlContext)
-    val results = calculateMissingValues(taxiDataFrame, sqlContext)
-    results.select(DropoffLatHeader, DropoffLonHeader, DropoffTimeHeader, "zscore", "pvalue")
+    val taxiDataFrameWithW = calculateW(taxiDataFrame, sqlContext)
+    val results = calculateZandP(taxiDataFrameWithW, sqlContext)
+      .select(DropoffLatHeader, DropoffLonHeader, DropoffTimeHeader, "zscore", "pvalue")
       .orderBy(desc("pvalue"))
-      .show(50)
+      .withColumnRenamed(DropoffLatHeader, "cell_x")
+      .withColumnRenamed(DropoffLonHeader, "cell_y")
+      .withColumnRenamed(DropoffTimeHeader, "time_step")
+
+    results.show(50)
+
+    val out: String = new File(s"$output/${conf.getString("output.filename")}").getAbsolutePath
+    Logger.getLogger(this.getClass).debug(s"Writing output to: $out")
+    results.write
+      .mode(SaveMode.Overwrite)
+      .format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save(out)
 
     sc.stop()
   }
