@@ -1,6 +1,6 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql.functions.{udf, _}
+import org.apache.spark.sql.functions.{count, mean, udf, _}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
@@ -32,17 +32,25 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     * @return df with missing values.
     */
   private def calculateMissingValues(df: DataFrame, sqlc: SQLContext): DataFrame = {
-    val count: Long = df.count()
-    val mean: Double = df.select(avg("count")).collect()(0).getDouble(0)
-    val sigma: Double = GiStar.calcStdDeviation(df.select("count").map(_.getAs[Long](0).toInt).collect().toList, mean)
+    /*
+        val count: Long = df.count()
+        val mean: Double = df.select(avg("count")).collect()(0).getDouble(0)
+        */
+    val colName: String = "count"
+    val counts = df.select(count(colName), mean(colName), stddev(colName)).head()
+    val c: Long = counts.getLong(0)
+    val m: Double = counts.getDouble(1)
+    val stdDev: Double = counts.getDouble(2)
+    val sigma: Double = stdDev * stdDev
 
-    Logger.getLogger(this.getClass).info(s"Evaluating a total of $count rows.")
-    Logger.getLogger(this.getClass).debug(s"Mean of $count rows: $mean")
-    Logger.getLogger(this.getClass).debug(s"Sigma: $sigma")
+    Logger.getLogger(this.getClass).info(s"Evaluating a total of $c rows.")
+    Logger.getLogger(this.getClass).debug(s"Mean: $m")
+    Logger.getLogger(this.getClass).debug(s"stdDev: $stdDev")
+    Logger.getLogger(this.getClass).debug(s"sigma: $sigma")
 
     def zAndP(neighbors: String) = {
       val w = neighbors.split(",").map(_.toInt).toList
-      val z = GiStar.calcZ(w, count, mean, sigma)
+      val z = GiStar.calcZ(w, c, m, sigma)
       val p = GiStar.calcP(z)
       Seq(z, p)
     }
@@ -63,11 +71,11 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     * @param sqlc     The properly initialized SQLContext
     * @return A DataFrame containing tuples in this form: (t, x, y, count, w)
     */
-  private def transformCsvToDf(cellSize: Double, timeSize: Double, filename: String, sqlc: SQLContext): DataFrame = {
+  def transformCsvToDf(cellSize: Double, timeSize: Double, filename: String, sqlc: SQLContext): DataFrame = {
     val df = sqlc.read
       .format("com.databricks.spark.csv")
       .option("header", "true")
-      .option("inferSchema", "true")
+      // .option("inferSchema", "true")
       .load(filename)
 
     def tUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
@@ -88,8 +96,6 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .groupBy(DropoffTimeHeader, DropoffLatHeader, DropoffLonHeader)
       .count()
       .withColumn("w", calcW())
-
-    txyn.describe()
 
     txyn
   }
