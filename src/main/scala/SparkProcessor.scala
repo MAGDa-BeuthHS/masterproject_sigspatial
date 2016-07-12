@@ -1,12 +1,15 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.functions.{udf, _}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
+import utils.math.GiStar
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
 import utils.writer.Writer
+
+import scala.util.Random
 
 class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Seq[Writer]) extends Serializable {
 
@@ -22,45 +25,31 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
   val DropoffLonMin: Double = conf.getDouble("dropoff.lon.min")
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
-  val schema = StructType(List(
-    new StructField("t", IntegerType, false),
-    new StructField("x", IntegerType, false),
-    new StructField("y", IntegerType, false),
-    new StructField("count", IntegerType, false)
-  ))
+  /**
+    * Adds missing z and p values to rows in df.
+    *
+    * @param df without z and p values.
+    * @return df with missing values.
+    */
+  private def calculateMissingValues(df: DataFrame, sqlc: SQLContext): DataFrame = {
+    val count: Long = df.count()
+    val mean: Double = df.select(avg("count")).collect()(0).getDouble(0)
+    val sigma: Double = GiStar.calcStdDeviation(df.select("count").map(_.getAs[Long](0).toInt).collect().toList, mean)
 
-  def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
-    val sparkConf = new SparkConf()
-
-      /**
-        * enable the following line to make it work locally.
-        * But beware: if it runs on the cluster with this line not uncommented the cluster uses only one node!
-        */
-      // .setMaster("local[1]")
-      .setAppName(conf.getString("app.name"))
-
-    val sc = new SparkContext(sparkConf)
-    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-
-    // For sanity's sake
-    Logger.getLogger("org").setLevel(Level.ERROR)
-    Logger.getLogger("akka").setLevel(Level.ERROR)
-    Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
-
-    val taxiFile: RDD[String] = sc.textFile(getFilenames(input))
-
-    val taxiData = transformCsvToRdd(cellSize, timeSize, taxiFile)
-
-    val stats: RDD[Int] = taxiData.map(_._2)
-    val count = stats.count()
-    val mean = stats.mean()
     Logger.getLogger(this.getClass).info(s"Evaluating a total of $count rows.")
     Logger.getLogger(this.getClass).debug(s"Mean of $count rows: $mean")
+    Logger.getLogger(this.getClass).debug(s"Sigma: $sigma")
 
-    val df = sqlContext.createDataFrame(taxiData.map(line => Row(line._1._1, line._1._2, line._1._3, line._2)), schema)
-    val results = df.filter("t = 0 OR t = 1 OR t = 2").orderBy("t").select("t").show()
+    def zAndP(neighbors: String) = {
+      val w = neighbors.split(",").map(_.toInt).toList
+      val z = GiStar.calcZ(w, count, mean, sigma)
+      val p = GiStar.calcP(z)
+      Seq(z, p)
+    }
 
-    sc.stop()
+    val schema = StructType(df.schema.fields ++ Array(StructField("zscore", DoubleType), StructField("pvalue", DoubleType)))
+    val rows = df.rdd.map(r => Row.fromSeq(r.toSeq ++ zAndP(r.getString(4))))
+    sqlc.createDataFrame(rows, schema)
   }
 
   /**
@@ -70,45 +59,72 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     *
     * @param cellSize cli argument
     * @param timeSize cli argument
-    * @param taxiFile the RDD to operate on
-    * @return An RDD containing tuples in this form ((t, x, y) count)
+    * @param filename cli argument
+    * @param sqlc     The properly initialized SQLContext
+    * @return A DataFrame containing tuples in this form: (t, x, y, count, w)
     */
-  private def transformCsvToRdd(cellSize: Double, timeSize: Double, taxiFile: RDD[String]): RDD[((Int, Int, Int), Int)] = {
-    taxiFile
-      // Remove header
-      .filter(!_.startsWith("VendorID"))
-      // Filter for the year 2015 with non-empty longitude and latitude
-      .filter(_.split(",")(DropoffLatIdx) != "")
-      .filter(_.split(",")(DropoffLonIdx) != "")
-      // Filter for the NYC area
-      .filter(_.split(",")(DropoffLatIdx).toDouble > DropoffLatMin)
-      .filter(_.split(",")(DropoffLatIdx).toDouble < DropoffLatMax)
-      .filter(_.split(",")(DropoffLonIdx).toDouble > DropoffLonMin)
-      .filter(_.split(",")(DropoffLonIdx).toDouble < DropoffLonMax)
-      // get only the relevant fields off of every csv line and map them to our (t, x, y) representation
-      .map(line => parseCsvLine(line, cellSize, timeSize))
-      // reduce by counting everything with the same key
-      .reduceByKey(_ + _)
+  private def transformCsvToDf(cellSize: Double, timeSize: Double, filename: String, sqlc: SQLContext): DataFrame = {
+    val df = sqlc.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true")
+      .option("inferSchema", "true")
+      .load(filename)
+
+    def tUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
+    def xUDF = udf((x: String) => gridSlicer.getLatCell(x.toDouble, cellSize))
+    def yUDF = udf((y: String) => gridSlicer.getLonCell(y.toDouble, cellSize))
+    def calcW = udf(() => List.fill(27)(Random.nextInt(100)).mkString(",")) // TODO
+
+    val txyn = df.filter(df(DropoffLatHeader).isNotNull)
+      .filter(df(DropoffLatHeader).geq(DropoffLatMin))
+      .filter(df(DropoffLatHeader).leq(DropoffLatMax))
+      .filter(df(DropoffLonHeader).isNotNull)
+      .filter(df(DropoffLonHeader).geq(DropoffLonMin))
+      .filter(df(DropoffLonHeader).leq(DropoffLonMax))
+      .select(df(DropoffTimeHeader), df(DropoffLatHeader), df(DropoffLonHeader))
+      .withColumn(DropoffTimeHeader, tUDF(df(DropoffTimeHeader)))
+      .withColumn(DropoffLatHeader, xUDF(df(DropoffLatHeader)))
+      .withColumn(DropoffLonHeader, yUDF(df(DropoffLonHeader)))
+      .groupBy(DropoffTimeHeader, DropoffLatHeader, DropoffLonHeader)
+      .count()
+      .withColumn("w", calcW())
+
+    txyn.describe()
+
+    txyn
   }
 
-  def printResults(results: DataFrame): Unit = {
-    Logger.getLogger(this.getClass).info(results)
-    Logger.getLogger(this.getClass).info(s"lines: ${results.count()}")
-    results.map(row => row.mkString(",")).foreach(println)
-  }
-
-  def getFilenames(dir: String): String = {
+  private def getFilenames(dir: String): String = {
     Logger.getLogger(this.getClass).debug(s"Looking for files in $dir")
     val filenames = new java.io.File(dir).listFiles.filter(_.getName.endsWith(".csv")).mkString(",")
     Logger.getLogger(this.getClass).debug(s"Found files: $filenames")
     filenames
   }
 
-  def parseCsvLine(line: String, cellSize: Double, timeSize: Double): ((Int, Int, Int), Int) = {
-    val fields = line.split(",")
+  def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
+    val sparkConf = new SparkConf()
 
-    val cells = gridSlicer.getCellsForPoint((fields(DropoffLatIdx).toDouble, fields(DropoffLonIdx).toDouble), cellSize)
+      /**
+        * enable the following line to make it work locally.
+        * But beware: if it runs on the cluster with this line not uncommented the cluster uses only one node!
+        */
+      .setMaster("local[1]")
+      .setAppName(conf.getString("app.name"))
 
-    ((timeSlicer.getSliceForTimestamp(fields(DropoffTimeIdx), timeSize), cells._1, cells._2), 1)
+    val sc = new SparkContext(sparkConf)
+    val sqlContext = new SQLContext(sc)
+
+    // For sanity's sake
+    Logger.getLogger("org").setLevel(Level.ERROR)
+    Logger.getLogger("akka").setLevel(Level.ERROR)
+    Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
+
+    val taxiDataFrame = transformCsvToDf(cellSize, timeSize, input, sqlContext)
+    val results = calculateMissingValues(taxiDataFrame, sqlContext)
+    results.select(DropoffLatHeader, DropoffLonHeader, DropoffTimeHeader, "zscore", "pvalue")
+      .orderBy(desc("pvalue"))
+      .show(50)
+
+    sc.stop()
   }
 }
