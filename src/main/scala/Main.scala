@@ -3,6 +3,7 @@ import java.io.File
 import com.typesafe.config.ConfigFactory
 import org.apache.hadoop.mapred.InvalidInputException
 import org.apache.log4j.{Level, Logger}
+import org.joda.time.DateTime
 import utils.slicer.grid.SimpleGridSlicer
 import utils.slicer.time.SimpleTimeSlicer
 import utils.writer.{CsvWriter, TerminalWriter}
@@ -28,6 +29,7 @@ object Main extends App {
   }
 
   try {
+    logger.info(s"Started at: ${new DateTime().toString()}")
     logger.debug(s"${args.length} arguments supplied:")
     args.foreach(logger.debug)
     if (args.length != 4) throw new IllegalArgumentException("Number of parameters is completely wrong, man!")
@@ -38,7 +40,7 @@ object Main extends App {
     val timeSize: Double = args(3).toDouble
 
     val inputDir: File = new File(input)
-    if (!inputDir.isDirectory && !inputDir.canRead) throw new IllegalArgumentException("Input directory ${inputDir.getAbsolutePath} is not readable!")
+    if (!inputDir.isDirectory && !inputDir.canRead) throw new IllegalArgumentException(s"Input directory ${inputDir.getAbsolutePath} is not readable!")
 
     val outputDir: File = new File(output)
     if (!outputDir.isDirectory && outputDir.canWrite) throw new IllegalArgumentException(s"Output directory ${outputDir.getAbsolutePath} is not writable!")
@@ -47,6 +49,8 @@ object Main extends App {
     if (timeSize <= 0) throw new IllegalArgumentException("timeSize must be > 0")
 
     sp.process(input, output, cellSize, timeSize)
+
+    logger.info(s"Finished at: ${new DateTime().toString()}")
 
   } catch {
     case e: InvalidInputException => logger.error(e.getMessage)

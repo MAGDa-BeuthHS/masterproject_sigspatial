@@ -27,6 +27,13 @@ object GiStar extends Serializable {
     numerator / denominator
   }
 
+  def calcZ(wLength: Int, wSum: Int, n: Long, avg: Double, s: Double): Double = {
+    val numerator = wSum - (avg * wLength)
+    val den1 = wLength.toDouble * (n.toDouble - wLength) * s
+    val denominator = sqrt(den1 / (n - 1).toDouble)
+    numerator / denominator
+  }
+
   def calcP(z: Double): Double = {
     val mu = 0.0
     val sigma = 1.0

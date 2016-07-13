@@ -1,10 +1,8 @@
-import java.io.File
-
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions.{count, mean, udf, _}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.math.GiStar
 import utils.slicer.grid.GridSlicer
@@ -29,7 +27,8 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
 
   private def calculateW(df: DataFrame, sQLContext: SQLContext): DataFrame = {
     def calcW(): Seq[String] = {
-      Seq(List.fill(27)(Random.nextInt(100)).mkString(","))
+      val fakeLimit: Int = Math.ceil(4411 / 32).toInt
+      Seq(List.fill(27)(Random.nextInt(fakeLimit)).mkString(","))
     } // TODO
 
     val schema = StructType(df.schema.fields ++ Array(StructField("w", StringType)))
@@ -44,25 +43,21 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     * @return df with missing values.
     */
   private def calculateZandP(df: DataFrame, sqlc: SQLContext): DataFrame = {
-    /*
-        val count: Long = df.count()
-        val mean: Double = df.select(avg("count")).collect()(0).getDouble(0)
-        */
     val colName: String = "count"
     val counts = df.select(count(colName), mean(colName), stddev(colName)).head()
-    val c: Long = counts.getLong(0)
-    val m: Double = counts.getDouble(1)
+    val c: Long = counts.getLong(0) // n
+    val m: Double = counts.getDouble(1) // a
     val stdDev: Double = counts.getDouble(2)
-    val sigma: Double = stdDev * stdDev
+    val stdDevPow2: Double = stdDev * stdDev // s
 
     Logger.getLogger(this.getClass).info(s"Evaluating a total of $c rows.")
     Logger.getLogger(this.getClass).debug(s"Mean: $m")
     Logger.getLogger(this.getClass).debug(s"stdDev: $stdDev")
-    Logger.getLogger(this.getClass).debug(s"sigma: $sigma")
+    Logger.getLogger(this.getClass).debug(s"stdDevPow2: $stdDevPow2")
 
     def zAndP(neighbors: String) = {
       val w = neighbors.split(",").map(_.toInt).toList
-      val z = GiStar.calcZ(w, c, m, sigma)
+      val z = GiStar.calcZ(w, c, m, stdDevPow2)
       val p = GiStar.calcP(z)
       Seq(z, p)
     }
@@ -129,23 +124,25 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
 
     val sc = new SparkContext(sparkConf)
     val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
 
     // For sanity's sake
     Logger.getLogger("org").setLevel(Level.ERROR)
     Logger.getLogger("akka").setLevel(Level.ERROR)
     Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
 
-    val taxiDataFrame = transformCsvToDf(cellSize, timeSize, input, sqlContext)
-    val taxiDataFrameWithW = calculateW(taxiDataFrame, sqlContext)
-    val results = calculateZandP(taxiDataFrameWithW, sqlContext)
+    val taxiDataFrame = transformCsvToDf(cellSize, timeSize, getFilenames(input), sqlContext)
+    // val taxiDataFrameWithW = calculateW(taxiDataFrame, sqlContext)
+    val results = calculateZandP(taxiDataFrame, sqlContext)
       .select(DropoffLatHeader, DropoffLonHeader, DropoffTimeHeader, "zscore", "pvalue")
-      .orderBy(desc("pvalue"))
+      .orderBy(asc("pvalue"))
       .withColumnRenamed(DropoffLatHeader, "cell_x")
       .withColumnRenamed(DropoffLonHeader, "cell_y")
       .withColumnRenamed(DropoffTimeHeader, "time_step")
 
-    results.show(50)
+    results.show()
 
+    /*
     val out: String = new File(s"$output/${conf.getString("output.filename")}").getAbsolutePath
     Logger.getLogger(this.getClass).debug(s"Writing output to: $out")
     results.write
@@ -153,7 +150,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .format("com.databricks.spark.csv")
       .option("header", "true")
       .save(out)
-
+    */
     sc.stop()
   }
 }
