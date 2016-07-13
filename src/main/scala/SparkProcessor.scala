@@ -1,12 +1,13 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.math.GiStar
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
 import utils.writer.Writer
+import java.io.File
 
 class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Seq[Writer]) extends Serializable {
 
@@ -79,8 +80,8 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .load(filename)
 
     def tUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
-    def xUDF = udf((x: String) => gridSlicer.getLatCell(x.toDouble, cellSize))
-    def yUDF = udf((y: String) => gridSlicer.getLonCell(y.toDouble, cellSize))
+    def xUDF = udf((x: String) => gridSlicer.getLonCell(x.toDouble, cellSize))
+    def yUDF = udf((y: String) => gridSlicer.getLatCell(y.toDouble, cellSize))
 
     val txyn = df.filter(df(DropoffLatHeader).isNotNull)
       .filter(df(DropoffLatHeader).geq(DropoffLatMin))
@@ -90,13 +91,13 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .filter(df(DropoffLonHeader).leq(DropoffLonMax))
       .select(df(DropoffTimeHeader), df(DropoffLatHeader), df(DropoffLonHeader))
       .withColumn(DropoffTimeHeader, tUDF(df(DropoffTimeHeader)))
-      .withColumn(DropoffLatHeader, xUDF(df(DropoffLatHeader)))
-      .withColumn(DropoffLonHeader, yUDF(df(DropoffLonHeader)))
+      .withColumn(DropoffLatHeader, yUDF(df(DropoffLatHeader)))
+      .withColumn(DropoffLonHeader, xUDF(df(DropoffLonHeader)))
       .groupBy(DropoffTimeHeader, DropoffLatHeader, DropoffLonHeader)
       .count()
       .withColumnRenamed(DropoffTimeHeader, "t")
-      .withColumnRenamed(DropoffLatHeader, "x")
-      .withColumnRenamed(DropoffLonHeader, "y")
+      .withColumnRenamed(DropoffLatHeader, "y")
+      .withColumnRenamed(DropoffLonHeader, "x")
       .withColumnRenamed("count", "n")
 
     txyn
@@ -116,11 +117,12 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
         * enable the following line to make it work locally.
         * But beware: if it runs on the cluster with this line not uncommented the cluster uses all available nodes!
         */
-      .setMaster("local[*]")
+      //.setMaster("*")
       .setAppName(conf.getString("app.name"))
 
     val sc = new SparkContext(sparkConf)
     val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
 
     // For sanity's sake
     Logger.getLogger("org").setLevel(Level.ERROR)
@@ -133,20 +135,19 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .withColumnRenamed("x", "cell_x")
       .withColumnRenamed("y", "cell_y")
       .withColumnRenamed("t", "time_step")
-      .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
-      .orderBy(asc("pvalue"))
+      // .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
+      //.orderBy(asc("pvalue"))
+      .orderBy($"time_step", $"cell_y", $"cell_x")
+      //.limit(50)
 
-    results.show()
-
-    /*
-    val out: String = new File(s"$output/${conf.getString("output.filename")}").getAbsolutePath
+    val out: String = new File(s"$output").getAbsolutePath
     Logger.getLogger(this.getClass).debug(s"Writing output to: $out")
     results.write
       .mode(SaveMode.Overwrite)
       .format("com.databricks.spark.csv")
       .option("header", "true")
       .save(out)
-    */
+
     sc.stop()
   }
 }
