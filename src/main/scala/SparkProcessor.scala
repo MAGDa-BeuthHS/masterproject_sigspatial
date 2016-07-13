@@ -1,3 +1,5 @@
+import java.io.File
+
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions._
@@ -7,7 +9,6 @@ import utils.math.GiStar
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
 import utils.writer.Writer
-import java.io.File
 
 class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Seq[Writer]) extends Serializable {
 
@@ -55,8 +56,8 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
           && $"b.x".geq($"a.x" - 1) && $"b.x".leq($"a.x" + 1)
       )
       .groupBy($"a.x", $"a.y", $"a.t", $"a.n").agg(count($"b.n").as("wLength"), sum($"b.n").as("wSum"))
-      .withColumn("zscore", udfCalcZ($"wLength", $"wSum"))
-      .withColumn("pvalue", udfCalcP($"zscore"))
+      .withColumn("z", udfCalcZ($"wLength", $"wSum"))
+      .withColumn("p", udfCalcP($"z"))
 
     dfWithPandZ
   }
@@ -79,20 +80,17 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       // .option("inferSchema", "true")
       .load(filename)
 
-    def tUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
-    def xUDF = udf((x: String) => gridSlicer.getLonCell(x.toDouble, cellSize))
-    def yUDF = udf((y: String) => gridSlicer.getLatCell(y.toDouble, cellSize))
+    def timeUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
+    def lonUDF = udf((x: String) => gridSlicer.getLonCell(x.toDouble, cellSize))
+    def latUDF = udf((y: String) => gridSlicer.getLatCell(y.toDouble, cellSize))
 
     val txyn = df.filter(df(DropoffLatHeader).isNotNull)
-      .filter(df(DropoffLatHeader).geq(DropoffLatMin))
-      .filter(df(DropoffLatHeader).leq(DropoffLatMax))
-      .filter(df(DropoffLonHeader).isNotNull)
-      .filter(df(DropoffLonHeader).geq(DropoffLonMin))
-      .filter(df(DropoffLonHeader).leq(DropoffLonMax))
+      .filter(df(DropoffLatHeader).geq(DropoffLatMin) && df(DropoffLatHeader).leq(DropoffLatMax) && df(DropoffLatHeader).isNotNull
+        && df(DropoffLonHeader).geq(DropoffLonMin) && df(DropoffLonHeader).leq(DropoffLonMax) && df(DropoffLonHeader).isNotNull)
       .select(df(DropoffTimeHeader), df(DropoffLatHeader), df(DropoffLonHeader))
-      .withColumn(DropoffTimeHeader, tUDF(df(DropoffTimeHeader)))
-      .withColumn(DropoffLatHeader, yUDF(df(DropoffLatHeader)))
-      .withColumn(DropoffLonHeader, xUDF(df(DropoffLonHeader)))
+      .withColumn(DropoffTimeHeader, timeUDF(df(DropoffTimeHeader)))
+      .withColumn(DropoffLatHeader, latUDF(df(DropoffLatHeader)))
+      .withColumn(DropoffLonHeader, lonUDF(df(DropoffLonHeader)))
       .groupBy(DropoffTimeHeader, DropoffLatHeader, DropoffLonHeader)
       .count()
       .withColumnRenamed(DropoffTimeHeader, "t")
@@ -129,16 +127,18 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     Logger.getLogger("akka").setLevel(Level.ERROR)
     Logger.getLogger(this.getClass).setLevel(Level.DEBUG)
 
+    val formatDouble = udf((number: Double) => BigDecimal(number).setScale(4, BigDecimal.RoundingMode.HALF_UP).toDouble)
     val taxiDataFrame = transformCsvToDf(cellSize, timeSize, getFilenames(input), sqlContext)
-    // val taxiDataFrameWithW = calculateW(taxiDataFrame, sqlContext)
     val results = calculateZandP(taxiDataFrame, sqlContext)
       .withColumnRenamed("x", "cell_x")
       .withColumnRenamed("y", "cell_y")
       .withColumnRenamed("t", "time_step")
-      // .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
-      //.orderBy(asc("pvalue"))
-      .orderBy($"time_step", $"cell_y", $"cell_x")
-      //.limit(50)
+      .withColumn("zscore", formatDouble($"z"))
+      .withColumn("pvalue", formatDouble($"p"))
+      .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
+      .filter($"pvalue".gt(0.0) && $"pvalue".leq(0.05))
+      .orderBy(asc("pvalue"))
+      .limit(50)
 
     val out: String = new File(s"$output").getAbsolutePath
     Logger.getLogger(this.getClass).debug(s"Writing output to: $out")
