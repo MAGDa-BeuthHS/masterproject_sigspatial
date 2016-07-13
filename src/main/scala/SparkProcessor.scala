@@ -1,15 +1,12 @@
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql.functions.{count, mean, udf, _}
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 import utils.math.GiStar
 import utils.slicer.grid.GridSlicer
 import utils.slicer.time.TimeSlicer
 import utils.writer.Writer
-
-import scala.util.Random
 
 class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Seq[Writer]) extends Serializable {
 
@@ -25,17 +22,6 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
   val DropoffLonMin: Double = conf.getDouble("dropoff.lon.min")
   val DropoffLonMax: Double = conf.getDouble("dropoff.lon.max")
 
-  private def calculateW(df: DataFrame, sQLContext: SQLContext): DataFrame = {
-    def calcW(): Seq[String] = {
-      val fakeLimit: Int = Math.ceil(4411 / 32).toInt
-      Seq(List.fill(27)(Random.nextInt(fakeLimit)).mkString(","))
-    } // TODO
-
-    val schema = StructType(df.schema.fields ++ Array(StructField("w", StringType)))
-    val rows = df.rdd.map(r => Row.fromSeq(r.toSeq ++ calcW()))
-    sQLContext.createDataFrame(rows, schema)
-  }
-
   /**
     * Adds missing z and p values to rows in df.
     *
@@ -43,28 +29,35 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     * @return df with missing values.
     */
   private def calculateZandP(df: DataFrame, sqlc: SQLContext): DataFrame = {
-    val colName: String = "count"
+    import sqlc.implicits._
+
+    val colName: String = "n"
     val counts = df.select(count(colName), mean(colName), stddev(colName)).head()
-    val c: Long = counts.getLong(0) // n
-    val m: Double = counts.getDouble(1) // a
+    val c: Long = counts.getLong(0) // count
+    val m: Double = counts.getDouble(1) // mean
     val stdDev: Double = counts.getDouble(2)
-    val stdDevPow2: Double = stdDev * stdDev // s
+    val stdDevPow2: Double = stdDev * stdDev
 
     Logger.getLogger(this.getClass).info(s"Evaluating a total of $c rows.")
     Logger.getLogger(this.getClass).debug(s"Mean: $m")
     Logger.getLogger(this.getClass).debug(s"stdDev: $stdDev")
     Logger.getLogger(this.getClass).debug(s"stdDevPow2: $stdDevPow2")
 
-    def zAndP(neighbors: String) = {
-      val w = neighbors.split(",").map(_.toInt).toList
-      val z = GiStar.calcZ(w, c, m, stdDevPow2)
-      val p = GiStar.calcP(z)
-      Seq(z, p)
-    }
+    def udfCalcZ = udf((wLength: Int, wSum: Int) => GiStar.calcZ(wLength, wSum, c, m, stdDevPow2))
+    def udfCalcP = udf((z: Double) => GiStar.calcP(z))
 
-    val schema = StructType(df.schema.fields ++ Array(StructField("zscore", DoubleType), StructField("pvalue", DoubleType)))
-    val rows = df.rdd.map(r => Row.fromSeq(r.toSeq ++ zAndP(r.getString(4))))
-    sqlc.createDataFrame(rows, schema)
+    val dfWithPandZ = df.as("a")
+      .join(
+        df.as("b"),
+        $"b.t".geq($"a.t" - 1) && $"b.t".leq($"a.t" + 1)
+          && $"b.y".geq($"a.y" - 1) && $"b.y".leq($"a.y" + 1)
+          && $"b.x".geq($"a.x" - 1) && $"b.x".leq($"a.x" + 1)
+      )
+      .groupBy($"a.x", $"a.y", $"a.t", $"a.n").agg(count($"b.n").as("wLength"), sum($"b.n").as("wSum"))
+      .withColumn("zscore", udfCalcZ($"wLength", $"wSum"))
+      .withColumn("pvalue", udfCalcP($"zscore"))
+
+    dfWithPandZ
   }
 
   /**
@@ -101,6 +94,10 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .withColumn(DropoffLonHeader, yUDF(df(DropoffLonHeader)))
       .groupBy(DropoffTimeHeader, DropoffLatHeader, DropoffLonHeader)
       .count()
+      .withColumnRenamed(DropoffTimeHeader, "t")
+      .withColumnRenamed(DropoffLatHeader, "x")
+      .withColumnRenamed(DropoffLonHeader, "y")
+      .withColumnRenamed("count", "n")
 
     txyn
   }
@@ -124,7 +121,6 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
 
     val sc = new SparkContext(sparkConf)
     val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
 
     // For sanity's sake
     Logger.getLogger("org").setLevel(Level.ERROR)
@@ -134,11 +130,11 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     val taxiDataFrame = transformCsvToDf(cellSize, timeSize, getFilenames(input), sqlContext)
     // val taxiDataFrameWithW = calculateW(taxiDataFrame, sqlContext)
     val results = calculateZandP(taxiDataFrame, sqlContext)
-      .select(DropoffLatHeader, DropoffLonHeader, DropoffTimeHeader, "zscore", "pvalue")
+      .withColumnRenamed("x", "cell_x")
+      .withColumnRenamed("y", "cell_y")
+      .withColumnRenamed("t", "time_step")
+      .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
       .orderBy(asc("pvalue"))
-      .withColumnRenamed(DropoffLatHeader, "cell_x")
-      .withColumnRenamed(DropoffLonHeader, "cell_y")
-      .withColumnRenamed(DropoffTimeHeader, "time_step")
 
     results.show()
 
