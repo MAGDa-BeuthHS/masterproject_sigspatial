@@ -137,7 +137,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .withColumn("pvalue", formatDouble($"p"))
       .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
       .filter($"pvalue".gt(0.0) && $"pvalue".leq(0.05))
-      .orderBy(asc("pvalue"))
+      .orderBy(desc("zscore"))
       .limit(50)
 
     val out: String = new File(s"$output").getAbsolutePath

@@ -41,4 +41,10 @@ class SimpleGridSlicerSpec extends FlatSpec with Matchers {
     slicer.getMaxLonCell(0.1).shouldBe(100)
   }
 
+  it should "convert back and forth correctly" in {
+    val cellSize: Double = 0.001
+    val gridCells = slicer.getCellsForPoint((3.4724, -4.9342), cellSize)
+    slicer.getPointForCells(gridCells, cellSize) shouldBe (3.472,-4.934)
+  }
+
 }
