@@ -13,9 +13,23 @@ object GiStar extends Serializable {
   W: List of all neighbours attributes
    */
 
+  /**
+    * @param w List of all neighbours attributes
+    * @param n Number of all cells --> Length of x
+    * @param avg Average value of all cells
+    * @param s Standart Deviation of cell set
+    * @return z value
+    */
   def calcZ(w: List[Int], n: Long, avg: Double, s: Double): Double = {
     val numerator = w.sum - (avg * w.length)
     val den1 = w.length.toDouble * (n.toDouble - w.length) * s
+    val denominator = sqrt(den1 / (n - 1).toDouble)
+    numerator / denominator
+  }
+
+  def calcZ(wLength: Int, wSum: Int, n: Long, avg: Double, s: Double): Double = {
+    val numerator = wSum - (avg * wLength)
+    val den1 = wLength.toDouble * (n.toDouble - wLength) * s
     val denominator = sqrt(den1 / (n - 1).toDouble)
     numerator / denominator
   }

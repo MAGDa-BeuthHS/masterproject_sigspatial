@@ -2,12 +2,13 @@ package utils.slicer.time
 
 import java.text.SimpleDateFormat
 
-import org.joda.time.{DateTime, Duration}
+import org.joda.time.{DateTime, Days, Duration}
 
 class SimpleTimeSlicer extends TimeSlicer {
 
   val formatter = new SimpleDateFormat(conf.getString("app.datetimeformat"))
   val zero = new DateTime(formatter.parse(conf.getString("app.zero")))
+  val max = new DateTime(formatter.parse(conf.getString("app.max")))
 
   override def getSliceForTimestamp(timestampInCsv: String, sliceSize: Double): Int = {
     translateTimestamp(new DateTime(formatter.parse(timestampInCsv)), sliceSize)
@@ -23,5 +24,9 @@ class SimpleTimeSlicer extends TimeSlicer {
 
   override def getTimestampForSlice(slice: Int, sliceSize: Int): DateTime = {
     zero plus Duration.standardHours(slice.toLong * sliceSize.toLong)
+  }
+
+  override def getMaxSlice(sliceSize: Double): Int = {
+    (Days.daysBetween(zero.withTimeAtStartOfDay(), max.withTimeAtStartOfDay()).getDays.toDouble / sliceSize).toInt
   }
 }

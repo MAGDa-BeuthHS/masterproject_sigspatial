@@ -26,4 +26,4 @@ OPTIONS="$OPTIONS --master spark://fb6-005-200.beuth-hochschule.de:7077"
 
 INPUT="yellow_tripdata_2015-01.csv,yellow_tripdata_2015-02.csv,yellow_tripdata_2015-03.csv,yellow_tripdata_2015-04.csv,yellow_tripdata_2015-05.csv,yellow_tripdata_2015-06.csv,yellow_tripdata_2015-07.csv,yellow_tripdata_2015-08.csv,yellow_tripdata_2015-09.csv,yellow_tripdata_2015-10.csv,yellow_tripdata_2015-11.csv,yellow_tripdata_2015-12.csv"
 
-spark-submit $OPTIONS --class Main $JAR $INPUT $2 $3 $4
+spark-submit $OPTIONS --class Main $JAR $1 $2 0.001 7
