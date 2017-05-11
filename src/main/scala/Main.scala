@@ -38,10 +38,12 @@ object Main extends App {
     args.foreach(logger.debug)
     if (args.length != 4) throw new IllegalArgumentException("Number of parameters is completely wrong, man!")
 
-    val input: String = args(0)
-    val output: String = args(1)
+    val input = new Path(args(0))
+    val output = new Path(args(1))
     val cellSize: Double = args(2).toDouble
     val timeSize: Double = args(3).toDouble
+
+    conf.addResource()
 
     val inputDir: File = new File(input)
     if (!inputDir.isDirectory && !inputDir.canRead) throw new IllegalArgumentException(s"Input directory ${inputDir.getAbsolutePath} is not readable!")
