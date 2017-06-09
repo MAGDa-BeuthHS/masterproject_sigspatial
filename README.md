@@ -17,7 +17,7 @@ plan: build/assemble locally, copy to cluster, run on cluster
 
 basic invocation scheme:
 
-    spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in days]
+    spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in millis]
 
-* ssh into cluster and in homedir run: `spark-submit --class Main mp.jar yellow_tripdata_2015-01.csv ./ 0.01 7`
+* ssh into cluster and in homedir run: `spark-submit --class Main mp.jar yellow_tripdata_2015-01.csv ./ 0.001 7200000`
 * after a succesful run you\'ll find your results printed to stdout and written to `~/hdfs_home/mp_out.csv`
