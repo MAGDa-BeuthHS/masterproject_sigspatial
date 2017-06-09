@@ -6,7 +6,7 @@ import org.joda.time.DateTime
 trait TimeSlicer extends Serializable {
   val conf = ConfigFactory.load()
 
-  def getSliceForTimestamp(timestampInCsv: String, sliceSize: Double): Int
-  def getTimestampForSlice(slice: Int, sliceSize: Int): DateTime
-  def getMaxSlice(sliceSize: Double): Int
+  def getSlice(timestampInCsv: String, sliceSize: Long): Int
+  def getTimestamp(slice: Int, sliceSize: Long): DateTime
+  def getMaxSlice(sliceSize: Long): Int
 }

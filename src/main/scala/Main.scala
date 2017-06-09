@@ -37,7 +37,7 @@ object Main extends App {
     val input: String = args(0)
     val output: String = args(1)
     val cellSize: Double = args(2).toDouble
-    val timeSize: Double = args(3).toDouble
+    val timeSize: Long = args(3).toLong
 
     val inputDir: File = new File(input)
     if (!inputDir.isDirectory && !inputDir.canRead) throw new IllegalArgumentException(s"Input directory ${inputDir.getAbsolutePath} is not readable!")

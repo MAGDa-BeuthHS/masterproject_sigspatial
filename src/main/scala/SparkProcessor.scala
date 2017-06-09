@@ -73,14 +73,14 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     * @param sqlc     The properly initialized SQLContext
     * @return A DataFrame containing tuples in this form: (t, x, y, count, w)
     */
-  private def transformCsvToDf(cellSize: Double, timeSize: Double, filename: String, sqlc: SQLContext): DataFrame = {
+  private def transformCsvToDf(cellSize: Double, timeSize: Long, filename: String, sqlc: SQLContext): DataFrame = {
     val df = sqlc.read
       .format("com.databricks.spark.csv")
       .option("header", "true")
       // .option("inferSchema", "true")
       .load(filename)
 
-    def timeUDF = udf((ts: String) => timeSlicer.getSliceForTimestamp(ts, timeSize))
+    def timeUDF = udf((ts: String) => timeSlicer.getSlice(ts, timeSize))
     def lonUDF = udf((x: String) => gridSlicer.getLonCell(x.toDouble, cellSize))
     def latUDF = udf((y: String) => gridSlicer.getLatCell(y.toDouble, cellSize))
 
@@ -108,7 +108,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     filenames
   }
 
-  def process(input: String, output: String, cellSize: Double, timeSize: Double): Unit = {
+  def process(input: String, output: String, cellSize: Double, timeSize: Long): Unit = {
     val sparkConf = new SparkConf()
 
       /**
@@ -138,7 +138,7 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
       .select("cell_x", "cell_y", "time_step", "zscore", "pvalue")
       .filter($"pvalue".gt(0.0) && $"pvalue".leq(0.05))
       .orderBy(desc("zscore"))
-      .limit(50)
+      //.limit(50)
 
     val out: String = new File(s"$output").getAbsolutePath
     Logger.getLogger(this.getClass).debug(s"Writing output to: $out")

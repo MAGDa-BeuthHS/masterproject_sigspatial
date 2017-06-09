@@ -10,23 +10,26 @@ class SimpleTimeSlicer extends TimeSlicer {
   val zero = new DateTime(formatter.parse(conf.getString("app.zero")))
   val max = new DateTime(formatter.parse(conf.getString("app.max")))
 
-  override def getSliceForTimestamp(timestampInCsv: String, sliceSize: Double): Int = {
-    translateTimestamp(new DateTime(formatter.parse(timestampInCsv)), sliceSize)
+  override def getSlice(timestampInCsv: String, sliceSize: Long): Int = {
+    (((new DateTime(formatter.parse(timestampInCsv)).getMillis) - zero.getMillis) / sliceSize).toInt
+    //translateTimestamp(new DateTime(formatter.parse(timestampInCsv)), sliceSize)
   }
 
-  private def translateTimestamp(dt: DateTime, sliceSize: Double, zero: DateTime = zero): Int = {
+  /*private def translateTimestamp(dt: DateTime, sliceSize: Double, zero: DateTime = zero): Int = {
     ((roundDateTime(dt, Duration.standardHours((sliceSize * 24).toLong)).getMillis - zero.getMillis) / Duration.standardDays(2).getMillis).toInt
   }
 
   private def roundDateTime(t: DateTime, d: Duration): DateTime = {
     t minus (t.getMillis - (t.getMillis.toDouble / d.getMillis).round * d.getMillis)
+  }*/
+
+  override def getTimestamp(slice: Int, sliceSize: Long): DateTime = {
+    new DateTime(zero.getMillis + (slice.toLong * sliceSize))
+    //zero plus Duration.standardHours(slice.toLong * sliceSize.toLong)
   }
 
-  override def getTimestampForSlice(slice: Int, sliceSize: Int): DateTime = {
-    zero plus Duration.standardHours(slice.toLong * sliceSize.toLong)
-  }
-
-  override def getMaxSlice(sliceSize: Double): Int = {
-    (Days.daysBetween(zero.withTimeAtStartOfDay(), max.withTimeAtStartOfDay()).getDays.toDouble / sliceSize).toInt
+  override def getMaxSlice(sliceSize: Long): Int = {
+    getSlice(max.toString(), sliceSize)
+    //(Days.daysBetween(zero.withTimeAtStartOfDay(), max.withTimeAtStartOfDay()).getDays.toDouble / sliceSize).toInt
   }
 }
