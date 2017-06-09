@@ -29,7 +29,7 @@ class SimpleTimeSlicer extends TimeSlicer {
   }
 
   override def getMaxSlice(sliceSize: Long): Int = {
-    getSlice(max.toString(), sliceSize)
+    getSlice(conf.getString("app.max"), sliceSize)
     //(Days.daysBetween(zero.withTimeAtStartOfDay(), max.withTimeAtStartOfDay()).getDays.toDouble / sliceSize).toInt
   }
 }

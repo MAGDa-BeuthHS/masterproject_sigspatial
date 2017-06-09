@@ -6,6 +6,7 @@ plan: build/assemble locally, copy to cluster, run on cluster
 
 * install sbt
 * _install dependencies?_
+* specify scala version in build.sbt file
 * assemble: `sbt assembly`
 
 ## copy to cluster
