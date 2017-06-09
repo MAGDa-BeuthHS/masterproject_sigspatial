@@ -10,7 +10,7 @@ import utils.writer.{CsvWriter, TerminalWriter}
 
 /**
   * Example call:
-  * ./bin/spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in days]
+  * ./bin/spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in millis]
   */
 object Main extends App {
 
@@ -25,7 +25,7 @@ object Main extends App {
   private def printUsageAndError(msg: String) = {
     logger.error(msg)
     logger.error("This is how you do it:")
-    logger.error("./bin/spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in days]")
+    logger.error("./bin/spark-submit [spark properties] --class [submission class] [submission jar] [path to input] [path to output] [cell size in degrees] [time step size in millis]")
   }
 
   try {
