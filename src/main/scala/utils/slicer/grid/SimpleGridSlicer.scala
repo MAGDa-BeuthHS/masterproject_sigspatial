@@ -7,13 +7,11 @@ class SimpleGridSlicer() extends GridSlicer {
   }
 
   def getLonCell(coord: Double, cellSize: Double): Int = {
-    getCell(conf.getDouble("dropoff.lon.max"), cellSize, coord)
+    getCell(conf.getDouble("dropoff.lon.min"), cellSize, coord)
   }
 
   private def getCell(lowerBoundary: Double, cellSize: Double, coord: Double): Int = {
-    val max = Math.max(coord, lowerBoundary)
-    val min = Math.min(coord, lowerBoundary)
-    Math.floor((max - min) / cellSize).toInt
+    Math.floor(Math.abs((lowerBoundary - coord) / cellSize)).toInt
   }
 
   override def getCellsForPoint(p: (Double, Double), cellSize: Double): (Int, Int) = {
@@ -24,14 +22,23 @@ class SimpleGridSlicer() extends GridSlicer {
   }
 
   override def getMaxLatCell(cellSize: Double): Int = {
-    ((conf.getDouble("dropoff.lat.max") - conf.getDouble("dropoff.lat.min")) / cellSize).toInt
+    getLatCell(conf.getDouble("dropoff.lat.max"),cellSize)
   }
 
   override def getMaxLonCell(cellSize: Double): Int = {
-    ((conf.getDouble("dropoff.lon.max") - conf.getDouble("dropoff.lon.min")) / cellSize).toInt
+    getLatCell(conf.getDouble("dropoff.lon.max"),cellSize)
   }
 
-  override def getPointForCells(p: (Int, Int), cellSize: Double): (Double, Double) = {
-    (conf.getDouble("dropoff.lat.min") + p._1 * cellSize, conf.getDouble("dropoff.lon.max") - p._2 * cellSize)
+  override def getCenterPointForCell(c: (Int, Int), cellSize: Double): (Double, Double) = {
+    if ((c._1 >= 0 && c._1 < getMaxLatCell(cellSize)) &&
+      (c._2 >= 0 && c._2 < getMaxLonCell(cellSize))) {
+      (conf.getDouble("dropoff.lat.min") + (c._1 * cellSize) + (cellSize / 2),
+        conf.getDouble("dropoff.lon.min") + (c._2 * cellSize) + (cellSize / 2)
+        )
+    }
+    else {
+      null
+    }
   }
+
 }
