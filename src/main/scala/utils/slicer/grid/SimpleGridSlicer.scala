@@ -39,14 +39,14 @@ class SimpleGridSlicer() extends GridSlicer {
 
   override def getMaxLatCell(cellSize: Double): Int = {
     getLatCell(conf.getDouble("dropoff.lat.max"),cellSize) match {
-      case Some(maxLatCell) => maxLatCell
+      case Some(maxLatCell) => maxLatCell.toInt
       case None => -1
     }
   }
 
   override def getMaxLonCell(cellSize: Double): Int = {
-    getLatCell(conf.getDouble("dropoff.lon.max"),cellSize) match {
-      case Some(maxLonCell) => maxLonCell
+    getLonCell(conf.getDouble("dropoff.lon.max"),cellSize) match {
+      case Some(maxLonCell) => maxLonCell.toInt
       case None => -1
     }
   }
