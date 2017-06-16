@@ -84,9 +84,14 @@ class SparkProcessor(timeSlicer: TimeSlicer, gridSlicer: GridSlicer, writers: Se
     def lonUDF = udf((x: String) => gridSlicer.getLonCell(x.toDouble, cellSize))
     def latUDF = udf((y: String) => gridSlicer.getLatCell(y.toDouble, cellSize))
 
-    val txyn = df.filter(df(DropoffLatHeader).isNotNull)
-      .filter(df(DropoffLatHeader).geq(DropoffLatMin) && df(DropoffLatHeader).leq(DropoffLatMax) && df(DropoffLatHeader).isNotNull
-        && df(DropoffLonHeader).geq(DropoffLonMin) && df(DropoffLonHeader).leq(DropoffLonMax) && df(DropoffLonHeader).isNotNull)
+    val txyn = df
+      .filter(df(DropoffLatHeader).geq(DropoffLatMin)
+        && df(DropoffLatHeader).leq(DropoffLatMax)
+        && df(DropoffLatHeader).isNotNull
+        && df(DropoffLonHeader).geq(DropoffLonMin)
+        && df(DropoffLonHeader).leq(DropoffLonMax)
+        && df(DropoffLonHeader).isNotNull
+      )
       .select(df(DropoffTimeHeader), df(DropoffLatHeader), df(DropoffLonHeader))
       .withColumn(DropoffTimeHeader, timeUDF(df(DropoffTimeHeader)))
       .withColumn(DropoffLatHeader, latUDF(df(DropoffLatHeader)))
