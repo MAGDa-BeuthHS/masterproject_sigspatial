@@ -11,7 +11,7 @@ plan: build/assemble locally, copy to cluster, run on cluster
 
 ## copy to cluster
 
-* use scp: `scp target/scala-2.11/masterprojekt_sigspatial-assembly-1.0.jar sXXXXX@141.64.5.200:/data/home/sXXXXX/mp.jar`
+* use scp: `scp target/scala-2.11/masterprojekt_sigspatial-assembly-1.0.jar sXXXXX@clusterIP:/data/home/sXXXXX/mp.jar`
 * protip: insert correct username and use correct artifact version
 
 ## run on cluster
